@@ -1,4 +1,4 @@
-// api/capi.js (Vercel serverless) - stable debug version
+// api/capi.js (Vercel serverless) - CORS-enabled stable version
 import crypto from 'crypto';
 
 const DEFAULT_PIXEL_ID = process.env.PIXEL_ID || '1340570021110699';
@@ -18,8 +18,28 @@ function getAccessTokenForPixel(pixelId) {
   return '';
 }
 
+function setCorsHeaders(res, origin = '*') {
+  // Nếu muốn giới hạn origin, thay '*' bằng domain của anh
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-capi-secret');
+  res.setHeader('Access-Control-Max-Age', '600'); // cache preflight 10 phút
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  // Set CORS for all responses
+  // If you want to restrict, use: const origin = req.headers.origin === 'https://your-domain' ? req.headers.origin : 'https://your-domain';
+  const origin = '*';
+  setCorsHeaders(res, origin);
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   try {
     const body = typeof req.body === 'object' ? req.body : JSON.parse(req.body || '{}');
@@ -55,7 +75,7 @@ export default async function handler(req, res) {
           event_time: Math.floor(Date.now() / 1000),
           event_id: event_id || crypto.randomUUID(),
           event_source_url: event_source_url || null,
-          user_data: ud,
+          user_data: Object.keys(ud).length ? ud : undefined,
           custom_data: {
             currency,
             content_type: 'product',
@@ -73,9 +93,12 @@ export default async function handler(req, res) {
     });
     const fbJson = await fbRes.json();
 
+    // ensure CORS headers also on final response
+    setCorsHeaders(res, origin);
     return res.status(fbRes.ok ? 200 : 502).json({ ok: fbRes.ok, fb: fbJson });
   } catch (err) {
     console.error('CAPI handler error:', err);
+    setCorsHeaders(res, origin);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
