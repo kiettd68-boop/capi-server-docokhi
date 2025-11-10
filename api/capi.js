@@ -1,11 +1,9 @@
-// placeholder - waiting for server code
 // api/capi.js (Vercel serverless)
-// Dùng Pixel ID: 1340570021110699 (anh đổi nếu cần)
 import crypto from 'crypto';
 
 const DEFAULT_PIXEL_ID = process.env.PIXEL_ID || '1340570021110699';
 const PIXEL_TOKENS_RAW = process.env.PIXEL_TOKENS || '{}';
-const CAPI_SECRET_EXPECTED = process.env.CAPI_SECRET || ''; // nếu để rỗng thì server không kiểm tra header
+const CAPI_SECRET_EXPECTED = process.env.CAPI_SECRET || ''; // để rỗng nếu ko muốn kiểm tra header
 
 function sha256Lowercase(input = '') {
   return crypto.createHash('sha256').update(String(input).trim().toLowerCase()).digest('hex');
@@ -16,23 +14,22 @@ function getAccessTokenForPixel(pixelId) {
     const parsed = JSON.parse(PIXEL_TOKENS_RAW);
     if (parsed && parsed[pixelId]) return parsed[pixelId];
   } catch (e) {
-    // không phải JSON, try fallback formats
-    // nếu PIXEL_TOKENS là "PIXELID|TOKEN" hoặc "PIXELID,TOKEN"
+    // fallback: hỗ trợ "PIXELID|TOKEN" hoặc "PIXELID,TOKEN" hoặc token trực tiếp
     if (PIXEL_TOKENS_RAW.includes('|') || PIXEL_TOKENS_RAW.includes(',')) {
       const sep = PIXEL_TOKENS_RAW.includes('|') ? '|' : ',';
       const parts = PIXEL_TOKENS_RAW.split(sep).map(s => s.trim());
       if (parts[0] === pixelId && parts[1]) return parts[1];
     }
+    // nếu PIXEL_TOKENS_RAW là token đơn và pixelId là DEFAULT_PIXEL_ID
+    if (!PIXEL_TOKENS_RAW.startsWith('{') && PIXEL_TOKENS_RAW.length > 10) return PIXEL_TOKENS_RAW;
   }
-  // fallback: nếu PIXEL_TOKENS_RAW itself is token and pixelId equals DEFAULT_PIXEL_ID, return it
-  if (!PIXEL_TOKENS_RAW.startsWith('{') && PIXEL_TOKENS_RAW.length > 10) return PIXEL_TOKENS_RAW;
   return '';
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Optional: validate secret header
+  // Optional: validate secret
   const incomingSecret = req.headers['x-capi-secret'] || '';
   if (CAPI_SECRET_EXPECTED && incomingSecret !== CAPI_SECRET_EXPECTED) {
     return res.status(401).json({ ok: false, error: 'Invalid x-capi-secret' });
@@ -58,7 +55,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok: false, error: 'Missing access token for pixel. Check PIXEL_TOKENS env.' });
     }
 
-    // build hashed user_data per FB requirements
+    // Hash user_data per Facebook (sha256 lowercase)
     const ud = {};
     if (user_data.email) ud.em = sha256Lowercase(user_data.email);
     if (user_data.phone) {
@@ -70,7 +67,7 @@ export default async function handler(req, res) {
 
     const eventTime = Math.floor(Date.now() / 1000);
 
-    // custom_data: Không gửi 'value' theo yêu cầu anh; chỉ gửi content_ids/currency nếu có
+    // custom_data: theo yêu cầu anh, KHÔNG gửi value/ROAS; chỉ gửi content_ids/currency nếu có
     const custom_data = {};
     if (currency) custom_data.currency = currency;
     if (content_ids && content_ids.length) custom_data.content_ids = content_ids;
