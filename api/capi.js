@@ -30,9 +30,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Optional: validate secret
-  const incomingSecret = req.headers['x-capi-secret'] || '';
-  if (CAPI_SECRET_EXPECTED && incomingSecret !== CAPI_SECRET_EXPECTED) {
-    return res.status(401).json({ ok: false, error: 'Invalid x-capi-secret' });
+  //const incomingSecret = req.headers['x-capi-secret'] || '';
+  //if (CAPI_SECRET_EXPECTED && incomingSecret !== CAPI_SECRET_EXPECTED) {
+    //return res.status(401).json({ ok: false, error: 'Invalid x-capi-secret' });
   }
 
   try {
